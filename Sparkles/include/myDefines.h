@@ -66,7 +66,10 @@
 
 
 
+#define AUDIO_PIN 5
 #define NUM_DEVICES 180
+
+
 
 #define MSG_ANIMATION 5
 
