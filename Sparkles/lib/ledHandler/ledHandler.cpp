@@ -7,13 +7,16 @@ LedHandler::LedHandler()
 
 void LedHandler::setup()
 {
+
     ledcAttach(ledPinRed1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    
     ledcAttach(ledPinGreen1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    
     ledcAttach(ledPinBlue1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
     ledcAttach(ledPinRed2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
     ledcAttach(ledPinGreen2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
-    ledcAttach(ledPinBlue2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
-
+    //ledcAttach(ledPinBlue2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    
     ledsOff();
 }
 
@@ -23,7 +26,7 @@ void LedHandler::ledsOff() {
     ledcWrite(ledPinBlue1, 0);
     ledcWrite(ledPinRed2, 0);
     ledcWrite(ledPinGreen2, 0);
-    ledcWrite(ledPinBlue2, 0);
+    //ledcWrite(ledPinBlue2, 0);
   
 }
 

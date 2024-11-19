@@ -57,6 +57,7 @@ void loop()
   {
     lastTick = millis();
     ESP_LOGI("", "Tick");
+    ESP_LOGI("", "ledPinBlue1: %d, ledPinRed1: %d, ledPinGreen1: %d, ledPinBlue2: %d, ledPinRed2: %d, ledPinGreen2: %d", ledPinBlue1, ledPinRed1, ledPinGreen1, ledPinBlue2, ledPinRed2, ledPinGreen2);
   }
   // put your main code here, to run repeatedly:
 }
