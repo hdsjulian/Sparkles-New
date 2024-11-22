@@ -4,10 +4,14 @@
 #include <esp_now.h>
 #include <ledHandler.h>
 
-class messageHandler
+class MessageHandler
 {
 public:
-    messageHandler();
+    static MessageHandler& getInstance() {
+        static MessageHandler instance; // Guaranteed to be destroyed and instantiated on first use
+        return instance;
+    }
+
     void setup(LedHandler &globalHandleLed);
     static void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
     static void onDataRecv(const esp_now_recv_info *mac, const uint8_t *incomingData, int len);
@@ -18,12 +22,16 @@ public:
 
 
 private:
+    MessageHandler();
+    // Delete copy constructor and assignment operator to prevent copying
+    MessageHandler(const MessageHandler&) = delete;
+    MessageHandler& operator=(const MessageHandler&) = delete;
     const uint8_t *incomingData;
     static constexpr uint8_t broadcastAddress[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-    QueueHandle_t messageQueue;
+    QueueHandle_t receiveQueue, sendQueue;
     esp_now_peer_info_t peerInfo;
     esp_now_peer_num_t peerNum;
-    static messageHandler* instance;
+    static MessageHandler* instance;
     LedHandler* ledInstance = nullptr;
 };
 #endif

@@ -6,20 +6,28 @@
 class LedHandler
 {
 public:
-    LedHandler();
+    static LedHandler& getInstance() {
+        static LedHandler instance; // Guaranteed to be destroyed and instantiated on first use
+        return instance;
+    }
+
     void setup();
     void startLedTask();
     void updatePosition();
     void updateTimerOffset();
     void addToMidiTable(midiNoteTable midiNoteTableArray[8], message_animate animation, int position);
     void pushToAnimationQueue(message_animate animation);
+    static void runBlink();
 
 private:
+    LedHandler();
+    LedHandler(const LedHandler&) = delete;
+    LedHandler& operator=(const LedHandler&) = delete;
     static void ledTaskWrapper(void *pvParameters);
     void ledTask();
     static void ledsOff();
     static void runMidi(midiNoteTable midiNoteTableArray[8], int position);
-    void runStrobe();
+    static void runStrobe();
     int timerOffset;
     int mode;
     int position;
@@ -36,10 +44,12 @@ private:
     static float calculateMidiDecay(unsigned long long startTime, int velocity, int note);
     static int getDecayTime(int midiNote, int velocity);
     static int getMidiNoteFromPosition(int position);
+    void handleQueue(message_animate& animation, message_animate& animationData, int currentPosition);
 
     SemaphoreHandle_t configMutex;
     QueueHandle_t ledQueue;
     message_animate animation;
+    midiNoteTable midiNoteTableArray[8];
 
 };
 

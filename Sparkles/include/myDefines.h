@@ -56,12 +56,13 @@
     const int ledPinRed2 = 9;
     const int ledPinBlue2 = 37;
 #elif (DEVICE_USED == V4)
-    const int ledPinBlue1 = 17;  // 16 corresponds to GPIO16
-    const int ledPinRed1 = 38; // 17 cmsgrorresponds to GPIO17
-    const int ledPinGreen1 = 8;  // 5 corresponds to GPIO5
-    const int ledPinGreen2 = 3;
-    const int ledPinRed2 = 9;
-    const int ledPinBlue2 = 37;
+#define LEDPINBLUE1 17  // 16 corresponds to GPIO16
+#define LEDPINBLUE2 37
+#define LEDPINRED1 38 // 17 cmsgrorresponds to GPIO17
+#define LEDPINRED2 9
+#define LEDPINGREEN1 8  // 5 corresponds to GPIO5
+#define LEDPINGREEN2 3
+
 #endif
 
 

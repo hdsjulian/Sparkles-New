@@ -9,8 +9,8 @@
 
 // put function declarations here:
 
-LedHandler ledInstance;
 messageHandler handleMessages;
+LedHandler& ledInstance = LedHandler::getInstance();
 
 uint8_t myAddress[6];
 
@@ -21,6 +21,7 @@ void OnDataRecv(const esp_now_recv_info *mac, const uint8_t *incomingData, int l
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t sendStatus) {}
 unsigned long lastTick = 0;
+int tickCount = 0;
 void setup()
 {
   Serial.begin(115200);
@@ -44,8 +45,10 @@ void setup()
     Serial.println("Error initializing ESP-NOW");
     return;
   }
+    delay(1000);
   ledInstance.setup();
-  //handleMessages.setup(ledInstance);
+ 
+   //handleMessages.setup(ledInstance);
 
 
   // put your setup code here, to run once:
@@ -55,9 +58,14 @@ void loop()
 {
   if (lastTick + 1000 < millis())
   {
+
+    tickCount++;
     lastTick = millis();
     ESP_LOGI("", "Tick");
-    ESP_LOGI("", "ledPinBlue1: %d, ledPinRed1: %d, ledPinGreen1: %d, ledPinBlue2: %d, ledPinRed2: %d, ledPinGreen2: %d", ledPinBlue1, ledPinRed1, ledPinGreen1, ledPinBlue2, ledPinRed2, ledPinGreen2);
+  }
+  if (tickCount > 10)
+  {
+    ESP_LOGI("", "Tick count exceeded");
   }
   // put your main code here, to run repeatedly:
 }

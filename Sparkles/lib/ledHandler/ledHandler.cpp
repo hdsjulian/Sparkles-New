@@ -3,40 +3,46 @@
 LedHandler::LedHandler()
 {
     configMutex = xSemaphoreCreateMutex();
+    ledQueue = xQueueCreate(10, sizeof(message_animate)); // Ensure the queue is created
+    if (ledQueue == NULL) {
+        Serial.println("Failed to create ledQueue");
+    }
 }
 
 void LedHandler::setup()
 {
 
-    ledcAttach(ledPinRed1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    ledcAttach(LEDPINRED1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
     
-    ledcAttach(ledPinGreen1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    ledcAttach(LEDPINBLUE1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
     
-    ledcAttach(ledPinBlue1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
-    ledcAttach(ledPinRed2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
-    ledcAttach(ledPinGreen2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
-    //ledcAttach(ledPinBlue2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    ledcAttach(LEDPINGREEN1, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    ledcAttach(LEDPINRED2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    ledcAttach(LEDPINGREEN2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
+    ledcAttach(LEDPINBLUE2, LEDC_BASE_FREQ, LEDC_TIMER_12_BIT);
     
     ledsOff();
+    startLedTask();
 }
 
 void LedHandler::ledsOff() {
-    ledcWrite(ledPinRed1, 0);
-    ledcWrite(ledPinGreen1, 0);
-    ledcWrite(ledPinBlue1, 0);
-    ledcWrite(ledPinRed2, 0);
-    ledcWrite(ledPinGreen2, 0);
-    //ledcWrite(ledPinBlue2, 0);
+    ledcWrite(LEDPINRED1, 0);
+    ledcWrite(LEDPINGREEN1, 0);
+    ledcWrite(LEDPINBLUE1, 0);
+    ledcWrite(LEDPINRED2, 0);
+    ledcWrite(LEDPINGREEN2, 0);
+    ledcWrite(LEDPINBLUE2, 0);
   
 }
 
 void LedHandler:: writeLeds(float rgb[3]) {
-    ledcWrite(ledPinRed1, rgb[0]);
-    ledcWrite(ledPinGreen1, rgb[1]);
-    ledcWrite(ledPinBlue1, rgb[2]);
-    ledcWrite(ledPinRed2, rgb[0]);
-    ledcWrite(ledPinGreen2, rgb[1]);
-    ledcWrite(ledPinBlue2, rgb[2]);
+    ESP_LOGI("LED", "writing leds %d, %d, %d ", (int)rgb[0],(int)rgb[1], (int)rgb[2]);
+    ledcWrite(LEDPINRED1, (int)rgb[0]);
+    ledcWrite(LEDPINGREEN1, (int) rgb[1]);
+    ledcWrite(LEDPINBLUE1, (int)rgb[2]);
+    ledcWrite(LEDPINRED2,(int) rgb[0]);
+    ledcWrite(LEDPINGREEN2, (int)rgb[1]);
+    ledcWrite(LEDPINBLUE2, (int)rgb[2]);
 }
 
 void LedHandler::startLedTask()
@@ -55,7 +61,6 @@ void LedHandler::ledTask()
     animationEnum animationType = OFF;
     unsigned long long animationStart = 0;
     message_animate animationData;
-    midiNoteTable midiNoteTableArray[8];
     int currentOffset;
     int currentMode;
     int currentPosition;
@@ -69,28 +74,53 @@ void LedHandler::ledTask()
             int currentPosition = position;
             xSemaphoreGive(configMutex);
         }
-        if (xQueueReceive(ledQueue, &animation, 0) == pdTRUE)
-        {
-            if (animation.animationType == MIDI)
-            {
-                addToMidiTable(midiNoteTableArray, animation, position);
-            }
-            else
-            {
-                animationData = animation;
-            }
-        }
         if (animationData.animationType == OFF)
-        {
+        {   
             ledsOff();
+            if (xQueueReceive(ledQueue, &animation, portMAX_DELAY) == pdTRUE) 
+            {
+                ESP_LOGI("Received", "LED Receive Data at %d", micros());
+
+                handleQueue(animation, animationData, currentPosition);
+                
+            }
             continue;
         }
-        else if (animationData.animationType == MIDI)
-        {
+        else {
+            if (xQueueReceive(ledQueue, &animation, 0) == pdTRUE) 
+            {   
+                ESP_LOGI("Received", "LED receive Data at %d", micros());
+
+                handleQueue(animation, animationData, currentPosition);
+            }
+        }
+        if (animationData.animationType == MIDI)
+        {   
             runMidi(midiNoteTableArray, position);
-            continue;
         }
+        else if (animationData.animationType == STROBE)
+        {
+            runStrobe();
+        }
+        else
+        {
+            ESP_LOGI("LED", "Unknown animation type %d", animationData.animationType);
+        }
+        vTaskDelay(10/portTICK_PERIOD_MS);
     }
+}
+
+void LedHandler::handleQueue(message_animate& animation, message_animate& animationData, int currentPosition) {
+    ESP_LOGI("LED", "Received animation message");
+    if (animation.animationType == MIDI) {
+        addToMidiTable(midiNoteTableArray, animation, position);
+    }
+    animationData = animation;
+
+}
+
+void LedHandler::runStrobe() {
+    
 }
 
 void LedHandler::pushToAnimationQueue(message_animate animation)
@@ -100,36 +130,58 @@ void LedHandler::pushToAnimationQueue(message_animate animation)
 
 void LedHandler::addToMidiTable(midiNoteTable midiNoteTableArray[8], message_animate animation, int position)
 {
-    if (animation.animationParams.midi.note % getMidiNoteFromPosition(position) + OCTAVE != 0)
+    ESP_LOGI("LED", "Adding to midi table: %d", animation.animationParams.midi.note);
+    if (animation.animationParams.midi.note % OCTAVE != getMidiNoteFromPosition(position) % OCTAVE)
     {
+        ESP_LOGI("LED", "Note %d is not in the same octave as the current position %d", animation.animationParams.midi.note, getMidiNoteFromPosition(position));
         return;
     }
 
     int note = animation.animationParams.midi.note;
     int velocity = animation.animationParams.midi.velocity;
     int octave = (note / OCTAVE) - 1;
+    ESP_LOGI("LED", "Adding: Note: %d, Velocity: %d, Octave: %d", note, velocity, octave);
     if (midiNoteTableArray[octave].velocity < velocity)
     {
         midiNoteTableArray[octave].velocity = velocity;
         midiNoteTableArray[octave].note = note;
         midiNoteTableArray[octave].startTime = velocity == 0 ? 0 : micros();
+        ESP_LOGI("LED", "Added: Note: %d, Velocity: %d, Octave: %d", note, velocity, octave);
+        ESP_LOGI("LED", "Start time: %llu", midiNoteTableArray[octave].startTime);
     }
     else if (velocity == 0)
     {
         midiNoteTableArray[octave].velocity = 0;
         midiNoteTableArray[octave].note = 0;
         midiNoteTableArray[octave].startTime = 0;
+        ESP_LOGI("LED", "Set to Zero");
     }
 }
 
+void placeholder(int octave, int octaveDistance, float distanceFactor, float currentBrightness, float midiDecayFactor, float note) {
+    ESP_LOGI("PLACEHOLDER", "octave: %d, octaveDistance: %d, distanceFactor: %.2f, currentBrightness: %.2f, midiDecayFactor: %.2f, note: %.2f", 
+             octave, octaveDistance, distanceFactor, currentBrightness, midiDecayFactor, note);
+    return;
+}
+
+
 void LedHandler::runMidi(midiNoteTable midiNoteTableArray[8], int position)
 {
-    int brightness = 0;
+    float brightness = 0;
     float huemod = 0;
     float satmod = 0;
     for (int i = 0; i < 8; i++)
     {
+        if (midiNoteTableArray[i].velocity == 0)
+        {
+            continue;
+        }
         float midiDecayFactor = calculateMidiDecay(midiNoteTableArray[i].startTime, midiNoteTableArray[i].velocity, midiNoteTableArray[i].note);
+        if (midiDecayFactor == 0.0)
+        {
+            continue;
+        }
+        ESP_LOGI("LED", "Decay factor: %f at %d", midiDecayFactor, micros());
         if (midiDecayFactor == 1)
         {
             midiNoteTableArray[i].velocity = 0;
@@ -144,30 +196,33 @@ void LedHandler::runMidi(midiNoteTable midiNoteTableArray[8], int position)
             int ledOctave = getOctaveFromPosition(position);
             int octaveDistance = abs(octave - ledOctave);
             float distanceFactor = 0.2 * octaveDistance;
-            int currentBrightness = (int)(velocity * midiDecayFactor * (1 - distanceFactor));
+            float currentBrightness = (int)(velocity * (1-midiDecayFactor) * (1 - distanceFactor));
             if (currentBrightness > brightness)
             {
                 brightness = currentBrightness;
                 huemod = -0.02 * octaveDistance;
                 satmod = 0.02 * octaveDistance;
             }
+
+                        
         }
     }
     if (brightness == 0)
-    {
+    {   
         ledsOff();
         return;
     }
     else {
         float rgb[3];
         hsv2rgb(midiHue + huemod, midiSat + satmod, brightness / 127, rgb);
+        ESP_LOGI("LED", "before: r: %.2f, g: %.2f, b: %.2f", rgb[0], rgb[1], rgb[2]);
         rgb[0] = float_to_sRGB(rgb[0]) * 255;
         rgb[1] = float_to_sRGB(rgb[1]) * 255;
         rgb[2] = float_to_sRGB(rgb[2]) * 255;
+        ESP_LOGI("LED", "Brightness: %.2f, rgb: %d, %d, %d", brightness, (int)rgb[0], (int)rgb[1], (int)rgb[2]);
         writeLeds(rgb);
     }
 }
-
 float LedHandler::calculateMidiDecay(unsigned long long startTime, int velocity, int note)
 {
     if (startTime == 0)
@@ -177,6 +232,8 @@ float LedHandler::calculateMidiDecay(unsigned long long startTime, int velocity,
     unsigned long long currentTime = micros();
     unsigned long long timeElapsed = currentTime - startTime;
     int decay = getDecayTime(note, velocity);
+    ESP_LOGI("LED", "Decay time: %d", decay);
+    ESP_LOGI("LED", "Time elapsed: %llu", timeElapsed);
     if (timeElapsed == 0)
     {
         return 1;
@@ -187,7 +244,8 @@ float LedHandler::calculateMidiDecay(unsigned long long startTime, int velocity,
     }
     else
     {
-        return timeElapsed / decay;
+        float decayFactor = (float) timeElapsed / float(decay);
+        return decayFactor;
     }
 }
 
@@ -244,3 +302,30 @@ float LedHandler::fract(float x) { return x - int(x); }
 float LedHandler::mix(float a, float b, float t) { return a + (b - a) * t; }
 
 float LedHandler::step(float e, float x) { return x < e ? 0.0 : 1.0; }
+
+
+void LedHandler::runBlink() {
+    float targetRgb[3] = {50, 0, 0};
+    float currentRgb[3] = {0, 0, 0};
+    int steps = 100; // Number of steps for fading
+    int delayTime = 10; // Delay time in milliseconds for each step
+
+    // Increase brightness
+    for (int i = 0; i <= steps; i++) {
+        currentRgb[0] = (targetRgb[0] / steps) * i;
+        currentRgb[1] = (targetRgb[1] / steps) * i;
+        currentRgb[2] = (targetRgb[2] / steps) * i;
+        ESP_LOGI("LED", "Brightness: %.2f, rgb: %d, %d, %d", (float)i, (int)currentRgb[0], (int)currentRgb[1], (int)currentRgb[2]);
+        writeLeds(currentRgb);
+        vTaskDelay(pdMS_TO_TICKS(delayTime));
+    }
+
+    // Decrease brightness
+    for (int i = steps; i >= 0; i--) {
+        currentRgb[0] = (targetRgb[0] / steps) * i;
+        currentRgb[1] = (targetRgb[1] / steps) * i;
+        currentRgb[2] = (targetRgb[2] / steps) * i;
+        writeLeds(currentRgb);
+        vTaskDelay(pdMS_TO_TICKS(delayTime));
+    }
+}
