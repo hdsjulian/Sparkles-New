@@ -47,7 +47,7 @@ void LedHandler:: writeLeds(float rgb[3]) {
 
 void LedHandler::startLedTask()
 {
-    xTaskCreatePinnedToCore(ledTaskWrapper, "ledTask", 10000, this, 1, NULL, 0);
+    xTaskCreatePinnedToCore(ledTaskWrapper, "ledTask", 10000, this, 2, NULL, 0);
 }
 
 void LedHandler::ledTaskWrapper(void *pvParameters)
@@ -79,6 +79,7 @@ void LedHandler::ledTask()
             ledsOff();
             if (xQueueReceive(ledQueue, &animation, portMAX_DELAY) == pdTRUE) 
             {
+                //GAMMA
                 ESP_LOGI("Received", "LED Receive Data at %d", micros());
 
                 handleQueue(animation, animationData, currentPosition);
@@ -89,6 +90,7 @@ void LedHandler::ledTask()
         else {
             if (xQueueReceive(ledQueue, &animation, 0) == pdTRUE) 
             {   
+                //GAMMA
                 ESP_LOGI("Received", "LED receive Data at %d", micros());
 
                 handleQueue(animation, animationData, currentPosition);
@@ -147,6 +149,7 @@ void LedHandler::addToMidiTable(midiNoteTable midiNoteTableArray[8], message_ani
         midiNoteTableArray[octave].note = note;
         midiNoteTableArray[octave].startTime = velocity == 0 ? 0 : micros();
         ESP_LOGI("LED", "Added: Note: %d, Velocity: %d, Octave: %d", note, velocity, octave);
+        //DELTA
         ESP_LOGI("LED", "Start time: %llu", midiNoteTableArray[octave].startTime);
     }
     else if (velocity == 0)

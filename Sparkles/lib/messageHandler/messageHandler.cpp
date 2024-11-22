@@ -18,7 +18,7 @@ void MessageHandler::setup(LedHandler &globalLedInstance) {
         ESP_LOGI("ERROR", "Error initializing ESP-NOW");
         return;
     }
-    xTaskCreatePinnedToCore(handleReceiveWrapper, "handleReceive", 10000, this, 1, NULL, 0);
+    xTaskCreatePinnedToCore(handleReceiveWrapper, "handleReceive", 10000, this, 2, NULL, 0);
     memcpy(&peerInfo.peer_addr, broadcastAddress, 6);
     peerInfo.channel = 0;  
     peerInfo.encrypt = false;
@@ -31,6 +31,7 @@ void MessageHandler::onDataSent(const uint8_t *mac_addr, esp_now_send_status_t s
 
 void MessageHandler::onDataRecv(const esp_now_recv_info * mac, const uint8_t *incomingData, int len) {
     ESP_LOGI("Received", "Data at %d", micros());
+    //ALPHA
 
     MessageHandler& instance = getInstance();
         instance.pushToRecvQueue(mac, incomingData, len);
@@ -49,6 +50,7 @@ void MessageHandler::handleReceive() {
     const uint8_t *incomingData;
     while (true) {
         if (xQueueReceive(receiveQueue, &incomingData, portMAX_DELAY) == pdTRUE) {
+            //BETA
             ESP_LOGI("Received", "Handlereceive Data at %d", micros());
             ESP_LOGI("MSG", "Received from queue");
             if (incomingData[0] == MSG_ANIMATION) {
