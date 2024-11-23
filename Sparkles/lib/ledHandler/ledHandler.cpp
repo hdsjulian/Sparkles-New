@@ -127,7 +127,9 @@ void LedHandler::runStrobe() {
 
 void LedHandler::pushToAnimationQueue(message_animate animation)
 {
-    xQueueSend(ledQueue, &animation, 0);
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xQueueSendFromISR(ledQueue, &animation, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void LedHandler::addToMidiTable(midiNoteTable midiNoteTableArray[8], message_animate animation, int position)

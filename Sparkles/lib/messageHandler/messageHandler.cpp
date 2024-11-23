@@ -2,11 +2,11 @@
 MessageHandler* MessageHandler::instance = nullptr;
 
 MessageHandler::MessageHandler() {
-    receiveQueue = xQueueCreate(10, sizeof(uint8_t *));
+    receiveQueue = xQueueCreate(10, sizeof(message_animate));
     if (receiveQueue == NULL) {
         ESP_LOGI("ERROR", "Failed to create receiveQueue");
     }
-    sendQueue = xQueueCreate(10, sizeof(uint8_t *));
+    sendQueue = xQueueCreate(10, sizeof(message_animate));
     if (sendQueue == NULL) {
         ESP_LOGI("ERROR", "Failed to create sendQueue");
     }
