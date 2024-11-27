@@ -43,7 +43,7 @@ void setup()
     Serial.println("LittleFS mount failed");
     lfs_started = false;
   }
-  WiFi.mode(WIFI_AP_STA);
+  WiFi.mode(WIFI_STA);
   if (esp_now_init() != ESP_OK)
   {
     Serial.println("Error initializing ESP-NOW");
@@ -65,6 +65,7 @@ void loop()
     //ledInstance.runBlink();
     lastTick = millis();
     ESP_LOGI("", "Tick");
+    Serial.println("Blub");
   }
   // put your main code here, to run repeatedly:
 }

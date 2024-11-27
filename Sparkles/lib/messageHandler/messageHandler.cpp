@@ -30,16 +30,20 @@ void MessageHandler::onDataSent(const uint8_t *mac_addr, esp_now_send_status_t s
 }
 
 void MessageHandler::onDataRecv(const esp_now_recv_info * mac, const uint8_t *incomingData, int len) {
-    ESP_LOGI("Received", "Data at %d", micros());
+    //ESP_LOGI("Received", "Data at %d", micros());
     //ALPHA
 
     MessageHandler& instance = getInstance();
-        instance.pushToRecvQueue(mac, incomingData, len);
+    instance.pushToRecvQueue(mac, incomingData, len);
 }
 void MessageHandler::pushToRecvQueue(const esp_now_recv_info *mac, const uint8_t *incomingData, int len) {
-    ESP_LOGI("MSG", "Pushing to queue");
-    xQueueSend(receiveQueue, &incomingData, 0);
+    message_animate msg;
+    memcpy(&msg, incomingData, len);
+    msg.timeStamp = micros();
+
+    xQueueSend(receiveQueue, &msg, 0);
 }
+
 
 void MessageHandler::handleReceiveWrapper(void *pvParameters) {
     MessageHandler *messageHandlerInstance = (MessageHandler *)pvParameters;
@@ -48,18 +52,28 @@ void MessageHandler::handleReceiveWrapper(void *pvParameters) {
 
 void MessageHandler::handleReceive() {
     const uint8_t *incomingData;
+    message_animate animation;
     while (true) {
-        if (xQueueReceive(receiveQueue, &incomingData, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(receiveQueue, &animation, portMAX_DELAY) == pdTRUE) {
             //BETA
-            ESP_LOGI("Received", "Handlereceive Data at %d", micros());
-            ESP_LOGI("MSG", "Received from queue");
-            if (incomingData[0] == MSG_ANIMATION) {
+            
+            //ESP_LOGI("MSG", "Received from queue");
+            if (animation.messageType == MSG_ANIMATION) {
+                //ESP_LOGI("MSG", "Received animation message");
+                //ESP_LOGI("MSG", "Animation type: %d", incomingData[1]);
+                //message_animate *animation = (message_animate *)incomingData;
+                //ESP_LOGI("MSG", "Midi note: %d", animation->animationParams.midi.note);
+                //ESP_LOGI("MSG", "Midi velocity: %d", animation->animationParams.midi.velocity);
+                
+                ledInstance->pushToAnimationQueue(animation);
+            }
+            else {
+                ESP_LOGI("MSG", "Unknown message type ");
                 ESP_LOGI("MSG", "Received animation message");
-                ESP_LOGI("MSG", "Animation type: %d", incomingData[1]);
-                message_animate *animation = (message_animate *)incomingData;
-                ESP_LOGI("MSG", "Midi note: %d", animation->animationParams.midi.note);
-                ESP_LOGI("MSG", "Midi velocity: %d", animation->animationParams.midi.velocity);
-                ledInstance->pushToAnimationQueue(*animation);
+                ESP_LOGI("MSG", "Animation type: %d", animation.animationType);
+                ESP_LOGI("MSG", "Midi note: %d", animation.animationParams.midi.note);
+                ESP_LOGI("MSG", "Midi velocity: %d", animation.animationParams.midi.velocity);
+
             }
         }
     }

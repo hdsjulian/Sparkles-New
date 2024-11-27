@@ -114,6 +114,7 @@ struct message_animate {
   uint8_t messageType = MSG_ANIMATION;
   animationEnum animationType;
   animation_params animationParams;
+  unsigned long timeStamp;
 };
 
 

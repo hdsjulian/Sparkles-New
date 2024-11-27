@@ -18,15 +18,22 @@ public:
     void addToMidiTable(midiNoteTable midiNoteTableArray[8], message_animate animation, int position);
     void pushToAnimationQueue(message_animate animation);
     static void runBlink();
+    void setTimerOffset(int newOffset);
+    int getTimerOffset();
+    void setMidiNoteTable(int index, midiNoteTable note);
+    midiNoteTable getMidiNoteTable(int index);
+    animationEnum getCurrentAnimation();
+    void setCurrentAnimation(animationEnum animation);
 
 private:
     LedHandler();
     LedHandler(const LedHandler&) = delete;
     LedHandler& operator=(const LedHandler&) = delete;
     static void ledTaskWrapper(void *pvParameters);
+    static void runMidiWrapper(void *pvParameters);
     void ledTask();
+    void runMidi();
     static void ledsOff();
-    static void runMidi(midiNoteTable midiNoteTableArray[8], int position);
     static void runStrobe();
     int timerOffset;
     int mode;
@@ -50,7 +57,7 @@ private:
     QueueHandle_t ledQueue;
     message_animate animation;
     midiNoteTable midiNoteTableArray[8];
-
+    SemaphoreHandle_t midiNoteTableMutex; 
 };
 
 #endif
