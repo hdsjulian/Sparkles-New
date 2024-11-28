@@ -29,7 +29,7 @@
 
 //magic numbers
 #define OCTAVE 12
-
+#define OCTAVESONKEYBOARD 8
 
 #if (DEVICE_USED == V1)
     const int ledPinBlue1 = 20;  // 16 corresponds to GPIO16

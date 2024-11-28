@@ -3,6 +3,7 @@
 #define LED_HANDLER_H
 #include <queue>
 
+#define FPS 60
 class LedHandler
 {
 public:
@@ -15,13 +16,14 @@ public:
     void startLedTask();
     void updatePosition();
     void updateTimerOffset();
-    void addToMidiTable(midiNoteTable midiNoteTableArray[8], message_animate animation, int position);
+    void addToMidiTable(midiNoteTable midiNoteTableArray[OCTAVESONKEYBOARD], message_animate animation, int position);
     void pushToAnimationQueue(message_animate animation);
     static void runBlink();
     void setTimerOffset(int newOffset);
     int getTimerOffset();
     void setMidiNoteTable(int index, midiNoteTable note);
     midiNoteTable getMidiNoteTable(int index);
+    void getMidiNoteTableArray(midiNoteTable* buffer, size_t size);
     animationEnum getCurrentAnimation();
     void setCurrentAnimation(animationEnum animation);
 
@@ -56,8 +58,10 @@ private:
     SemaphoreHandle_t configMutex;
     QueueHandle_t ledQueue;
     message_animate animation;
-    midiNoteTable midiNoteTableArray[8];
+    midiNoteTable midiNoteTableArray[OCTAVESONKEYBOARD];
     SemaphoreHandle_t midiNoteTableMutex; 
+    animationEnum currentAnimation;
+    TaskHandle_t midiTaskHandle;
 };
 
 #endif

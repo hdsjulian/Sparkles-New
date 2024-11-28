@@ -85,33 +85,32 @@ void LedHandler::ledTask()
             int currentPosition = position;
             xSemaphoreGive(configMutex);
         }
-        if (animationData.animationType == OFF)
+        if (getCurrentAnimation() == OFF)
         {   
             ledsOff();
             if (xQueueReceive(ledQueue, &animation, portMAX_DELAY) == pdTRUE) 
             {
-                //ESP_LOGI("Received", "LED Receive Data at %d", micros());
-                //ESP_LOGI("Received", "LED receive Data at %d", micros()-animation.timeStamp);
+                ESP_LOGI("Received", "LED receive Data at %d", micros()-animation.timeStamp);
                 int timeSpent = micros()-animation.timeStamp;
-                Serial.println("Received, LED receive Data att "+String(timeSpent));
                 handleQueue(animation, animationData, currentPosition);
                 
             }
-            if (animationData.animationType == MIDI )
-            {   
-                xTaskCreate(runMidiWrapper, "runMidi", 10000, this, currentPosition, NULL, 0);
-            }
+            ESP_LOGI("LED", "Current animation: %d", getCurrentAnimation());
             continue;
         }
         else {
             if (xQueueReceive(ledQueue, &animation, 0) == pdTRUE) 
             {   
-                //ESP_LOGI("Received", "LED receive Data at %d", micros()-animation.timeStamp);
-                Serial.printf("Received, LED receive Data at %lu\n", micros() - animation.timeStamp);
                 handleQueue(animation, animationData, currentPosition);
             }
-        }        
-        if (animationData.animationType == STROBE)
+        }    
+         if (getCurrentAnimation() == MIDI){   
+            if (midiTaskHandle == NULL || eTaskGetState(midiTaskHandle) == eDeleted) {
+                ESP_LOGI("LED", "Creating MIDI task");
+                xTaskCreate(runMidiWrapper, "runMidi", 10000, this, 1, &midiTaskHandle); // Create the runMidi task
+            }
+        }           
+        if (getCurrentAnimation() == STROBE)
             {
                 runStrobe();
             }
@@ -125,11 +124,11 @@ void LedHandler::ledTask()
 
 
 void LedHandler::handleQueue(message_animate& animation, message_animate& animationData, int currentPosition) {
-    //ESP_LOGI("LED", "Received animation message");
     if (animation.animationType == MIDI) {
         addToMidiTable(midiNoteTableArray, animation, position);
     }
     animationData = animation;
+    setCurrentAnimation(animation.animationType);
 
 }
 
@@ -143,19 +142,16 @@ void LedHandler::pushToAnimationQueue(message_animate animation)
     xQueueSend(ledQueue, &animation, 0);
 }
 
-void LedHandler::addToMidiTable(midiNoteTable midiNoteTableArray[8], message_animate animation, int position)
+void LedHandler::addToMidiTable(midiNoteTable midiNoteTableArray[OCTAVESONKEYBOARD], message_animate animation, int position)
 {
-    //ESP_LOGI("LED", "Adding to midi table: %d", animation.animationParams.midi.note);
     if (animation.animationParams.midi.note % OCTAVE != getMidiNoteFromPosition(position) % OCTAVE)
     {
-        //ESP_LOGI("LED", "Note %d is not in the same octave as the current position %d", animation.animationParams.midi.note, getMidiNoteFromPosition(position));
         return;
     }
 
     int note = animation.animationParams.midi.note;
     int velocity = animation.animationParams.midi.velocity;
     int octave = (note / OCTAVE) - 1;
-    //ESP_LOGI("LED", "Adding: Note: %d, Velocity: %d, Octave: %d", note, velocity, octave);
     if (xSemaphoreTake(midiNoteTableMutex, portMAX_DELAY) == pdTRUE) {
         if (midiNoteTableArray[octave].velocity < velocity)
         {
@@ -172,6 +168,7 @@ void LedHandler::addToMidiTable(midiNoteTable midiNoteTableArray[8], message_ani
             midiNoteTableArray[octave].startTime = 0;
             //ESP_LOGI("LED", "Set to Zero");
         }
+        xSemaphoreGive(midiNoteTableMutex);
     }
 }
 
@@ -186,14 +183,18 @@ void LedHandler::runMidi()
     float brightness = 0;
     float huemod = 0;
     float satmod = 0;
+    midiNoteTable localMidiNoteTableArray[OCTAVESONKEYBOARD];
     while (true) {
-        for (int i = 0; i < 8; i++)
-        {
-            if (midiNoteTableArray[i].velocity == 0)
+        getMidiNoteTableArray(localMidiNoteTableArray, sizeof(localMidiNoteTableArray));
+        bool brightnessZero = true;
+        for (int i = 0; i < OCTAVESONKEYBOARD; i++)
+        {   
+            if (localMidiNoteTableArray[i].velocity == 0)
             {
                 continue;
             }
-            float midiDecayFactor = calculateMidiDecay(midiNoteTableArray[i].startTime, midiNoteTableArray[i].velocity, midiNoteTableArray[i].note);
+            float midiDecayFactor = calculateMidiDecay(localMidiNoteTableArray[i].startTime, localMidiNoteTableArray[i].velocity, localMidiNoteTableArray[i].note);
+            ESP_LOGI("LED", "Decay factor: %f at %d", midiDecayFactor, micros());
             if (midiDecayFactor == 0.0)
             {
                 continue;
@@ -201,14 +202,14 @@ void LedHandler::runMidi()
             //ESP_LOGI("LED", "Decay factor: %f at %d", midiDecayFactor, micros());
             if (midiDecayFactor == 1)
             {
-                midiNoteTableArray[i].velocity = 0;
-                midiNoteTableArray[i].note = 0;
-                midiNoteTableArray[i].startTime = 0;
+                localMidiNoteTableArray[i].velocity = 0;
+                localMidiNoteTableArray[i].note = 0;
+                localMidiNoteTableArray[i].startTime = 0;
             }
             else
             {
-                int note = midiNoteTableArray[i].note;
-                int velocity = midiNoteTableArray[i].velocity;
+                int note = localMidiNoteTableArray[i].note;
+                int velocity = localMidiNoteTableArray[i].velocity;
                 int octave = (note / OCTAVE) - 1;
                 int ledOctave = getOctaveFromPosition(position);
                 int octaveDistance = abs(octave - ledOctave);
@@ -220,26 +221,28 @@ void LedHandler::runMidi()
                     huemod = -0.02 * octaveDistance;
                     satmod = 0.02 * octaveDistance;
                 }
+                brightnessZero = false;
 
                             
             }
         }
-        if (brightness == 0)
+        if (brightness == 0 || brightnessZero == true)  
         {   
             ledsOff();
             setCurrentAnimation(OFF);
-            return;
+            ESP_LOGI("LED", "Brightness is 0");
+            vTaskDelete(NULL);
         }
         else {
             float rgb[3];
             hsv2rgb(midiHue + huemod, midiSat + satmod, brightness / 127, rgb);
-            //ESP_LOGI("LED", "before: r: %.2f, g: %.2f, b: %.2f", rgb[0], rgb[1], rgb[2]);
+            ESP_LOGI("LED", "Brightness: %.2f before: r: %.2f, g: %.2f, b: %.2f", brightness, rgb[0], rgb[1], rgb[2]);
             rgb[0] = float_to_sRGB(rgb[0]) * 255;
             rgb[1] = float_to_sRGB(rgb[1]) * 255;
             rgb[2] = float_to_sRGB(rgb[2]) * 255;
-            //ESP_LOGI("LED", "Brightness: %.2f, rgb: %d, %d, %d", brightness, (int)rgb[0], (int)rgb[1], (int)rgb[2]);
             writeLeds(rgb);
         }
+        vTaskDelay((1000)/portTICK_PERIOD_MS);
     }
 }
 float LedHandler::calculateMidiDecay(unsigned long long startTime, int velocity, int note)
@@ -385,16 +388,28 @@ midiNoteTable LedHandler::getMidiNoteTable(int index) {
 }
 
 animationEnum LedHandler::getCurrentAnimation() {
-    animationEnum currentAnimation;
+    animationEnum animation;
     if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        currentAnimation = mode;
+        currentAnimation = currentAnimation;
         xSemaphoreGive(configMutex);
     }
-    return currentAnimation;
+    ESP_LOGI("LED", "Getting current animation %d", animation);
+    return animation;
 }
-void setCurrentAnimation(animationEnum animation) {
+void LedHandler::setCurrentAnimation(animationEnum animation) {
+    ESP_LOGI("LED", "Setting current animation to %d", animation);
     if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        mode = animation;
+        currentAnimation = animation;
         xSemaphoreGive(configMutex);
+    }
+}
+void LedHandler::getMidiNoteTableArray(midiNoteTable* buffer, size_t size) {
+    if (size < sizeof(midiNoteTableArray)) {
+        // Handle error: buffer is too small
+        return;
+    }
+    if (xSemaphoreTake(midiNoteTableMutex, portMAX_DELAY) == pdTRUE) {
+        memcpy(buffer, midiNoteTableArray, sizeof(midiNoteTableArray));
+        xSemaphoreGive(midiNoteTableMutex);
     }
 }
