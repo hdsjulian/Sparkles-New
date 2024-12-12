@@ -6,18 +6,22 @@
 #include "WiFi.h"
 #include <ledHandler.h>
 #include <messageHandler.h>
+#include <webServer.h>
 
 // put function declarations here:
 
-messageHandler handleMessages;
-LedHandler& ledInstance = LedHandler::getInstance();
 
+LedHandler& ledInstance = LedHandler::getInstance();
+MessageHandler& msgHandler = MessageHandler::getInstance();
 uint8_t myAddress[6];
 
 // state
 bool lfs_started = true;
 
-void OnDataRecv(const esp_now_recv_info *mac, const uint8_t *incomingData, int len) {}
+void OnDataRecv(const esp_now_recv_info *mac, const uint8_t *incomingData, int len) {
+ESP_LOGI("Received", "Data at %d", micros());
+
+}
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t sendStatus) {}
 unsigned long lastTick = 0;
@@ -39,33 +43,32 @@ void setup()
     Serial.println("LittleFS mount failed");
     lfs_started = false;
   }
-  WiFi.mode(WIFI_AP_STA);
+  WiFi.mode(WIFI_STA);
   if (esp_now_init() != ESP_OK)
+
   {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
     delay(1000);
-  ledInstance.setup();
- 
-   //handleMessages.setup(ledInstance);
-
+    ledInstance.setup();
+    msgHandler.setup(ledInstance);
+    WebServer& webServer = WebServer::getInstance(&LittleFS);
+    webServer.setup(msgHandler);
 
   // put your setup code here, to run once:
 }
 
 void loop()
 {
-  if (lastTick + 1000 < millis())
+  if (lastTick + 5000 < millis())
   {
-
-    tickCount++;
+    //ledInstance.runBlink();
+    uint8_t address[6];
+    WiFi.macAddress(address);
     lastTick = millis();
-    ESP_LOGI("", "Tick");
-  }
-  if (tickCount > 10)
-  {
-    ESP_LOGI("", "Tick count exceeded");
+    ESP_LOGI("", "Tick %s", msgHandler.stringAddress(address, true).c_str());
+    Serial.println("Blub");
   }
   // put your main code here, to run repeatedly:
 }

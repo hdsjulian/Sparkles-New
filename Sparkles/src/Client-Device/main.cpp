@@ -44,6 +44,7 @@ void setup()
     lfs_started = false;
   }
   WiFi.mode(WIFI_STA);
+  ESP_LOGI("", "Setup1");
   if (esp_now_init() != ESP_OK)
   {
     Serial.println("Error initializing ESP-NOW");
@@ -52,7 +53,7 @@ void setup()
     delay(1000);
   ledInstance.setup();
     msgHandler.setup(ledInstance);
-   //handleMessages.setup(ledInstance);
+    ESP_LOGI("", "Setup");
 
 
   // put your setup code here, to run once:

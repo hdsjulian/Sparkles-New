@@ -14,11 +14,12 @@ public:
 
     void setup();
     void startLedTask();
+    
     void updatePosition();
     void updateTimerOffset();
-    void addToMidiTable(midiNoteTable midiNoteTableArray[OCTAVESONKEYBOARD], message_animate animation, int position);
-    void pushToAnimationQueue(message_animate animation);
-    static void runBlink();
+    void addToMidiTable(midiNoteTable midiNoteTableArray[OCTAVESONKEYBOARD], message_animation animation, int position);
+    void pushToAnimationQueue(message_animation animation);
+    static void runBlinkOld();
     void setTimerOffset(int newOffset);
     int getTimerOffset();
     void setMidiNoteTable(int index, midiNoteTable note);
@@ -33,14 +34,17 @@ private:
     LedHandler& operator=(const LedHandler&) = delete;
     static void ledTaskWrapper(void *pvParameters);
     static void runMidiWrapper(void *pvParameters);
+    static void runBlinkWrapper(void *pvParameters);
+    static void runStrobeWrapper(void *pvParameters);
     void ledTask();
     void runMidi();
+    void runBlink();
+    void runStrobe();
     static void ledsOff();
-    static void runStrobe();
     int timerOffset;
     int mode;
     int position;
-    static constexpr float midiHue = 25 / 360;
+    static constexpr float midiHue = 25.0f / 360.0f;
     static constexpr float midiSat = 0.84;
     static void writeLeds(float rgb[3]);
     static float *hsv2rgb(float h, float s, float b, float *rgb);
@@ -49,19 +53,21 @@ private:
     static float fract(float x);
     static float mix(float a, float b, float t);
     static float step(float edge, float x);
+    static float intRGBToFloat(int val);
     static int getOctaveFromPosition(int position);
     static float calculateMidiDecay(unsigned long long startTime, int velocity, int note);
     static int getDecayTime(int midiNote, int velocity);
     static int getMidiNoteFromPosition(int position);
-    void handleQueue(message_animate& animation, message_animate& animationData, int currentPosition);
+    TickType_t microsToTicks(unsigned long long micros);
+    void handleQueue(message_animation& animation, message_animation& animationData, int currentPosition);
 
     SemaphoreHandle_t configMutex;
     QueueHandle_t ledQueue;
-    message_animate animation;
+    message_animation animation;
     midiNoteTable midiNoteTableArray[OCTAVESONKEYBOARD];
     SemaphoreHandle_t midiNoteTableMutex; 
     animationEnum currentAnimation;
-    TaskHandle_t midiTaskHandle;
+    TaskHandle_t midiTaskHandle, animationTaskHandle;
 };
 
 #endif
