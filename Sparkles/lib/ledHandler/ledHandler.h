@@ -2,6 +2,7 @@
 #ifndef LED_HANDLER_H
 #define LED_HANDLER_H
 #include <queue>
+#include <FastLED.h>
 
 #define FPS 60
 class LedHandler
@@ -18,15 +19,19 @@ public:
     void updatePosition();
     void updateTimerOffset();
     void addToMidiTable(midiNoteTable midiNoteTableArray[OCTAVESONKEYBOARD], message_animation animation, int position);
-    void pushToAnimationQueue(message_animation animation);
+    void pushToAnimationQueue(message_animation& animation);
     static void runBlinkOld();
-    void setTimerOffset(int newOffset);
-    int getTimerOffset();
+    void setTimerOffset(unsigned long long newOffset);
+    unsigned long long getTimerOffset();
     void setMidiNoteTable(int index, midiNoteTable note);
     midiNoteTable getMidiNoteTable(int index);
     void getMidiNoteTableArray(midiNoteTable* buffer, size_t size);
     animationEnum getCurrentAnimation();
     void setCurrentAnimation(animationEnum animation);
+    int getCurrentPosition();
+    void setCurrentPosition(int position);
+    void setAnimation(message_animation& animationData);
+    message_animation getAnimation();
 
 private:
     LedHandler();
@@ -46,7 +51,7 @@ private:
     int position;
     static constexpr float midiHue = 25.0f / 360.0f;
     static constexpr float midiSat = 0.84;
-    static void writeLeds(float rgb[3]);
+    static void writeLeds(CRGB color);
     static float *hsv2rgb(float h, float s, float b, float *rgb);
     static float float_to_sRGB(float x);
     static float sRGB_to_float(float val);

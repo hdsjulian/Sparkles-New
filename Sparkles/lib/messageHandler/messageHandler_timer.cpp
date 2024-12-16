@@ -13,21 +13,44 @@ void MessageHandler::runTimerSyncWrapper(void *pvParameters) {
     messageHandlerInstance->runTimerSync();
 }
 
+void MessageHandler::runAllTimerSyncWrapper(void *pvParameters) {
+    MessageHandler *messageHandlerInstance = (MessageHandler *)pvParameters;
+    for (int j = 0; j < 3; j++) {
+        for (int i = 0; i < NUM_DEVICES; i++) {
+            if (memcmp(messageHandlerInstance->getItemFromAddressList(i).address, messageHandlerInstance->emptyAddress, 6) == 0) {
+                break;
+            }
+            activeStatus status = messageHandlerInstance->getActiveStatus(i);
+            if (status == INACTIVE) {
+                messageHandlerInstance->setCurrentTimerIndex(i);
+                messageHandlerInstance->setTimerReset(true);
+                messageHandlerInstance->runTimerSync();
+            }
+            else {
+                continue;
+            }
+        }
+    }
+}
+
+
 void MessageHandler::runTimerSync() {
     message_timer timerMessage;
     message_data messageData;
     messageData.messageType = MSG_TIMER;
     setSettingTimer(true);
+    setTimerCounter(0);
+    setLastTimerCounter();
     int timerIndex  = getCurrentTimerIndex();
     if (timerIndex > -1) {
         addPeer(addressList[timerIndex].address);
     }
     while (getTimerSet() == false) {
-
-        timerMessage.counter++;
+        
+        timerMessage.counter = incrementTimerCounter();
         timerMessage.sendTime = micros();
         timerMessage.lastDelay = getLastDelay();
-        timerMessage.reset = false;
+        timerMessage.reset = getTimerReset();
         timerMessage.addressId = getCurrentTimerIndex();
         memcpy(&messageData.payload.timer, &timerMessage, sizeof(timerMessage));
         setLastSendTime(timerMessage.sendTime);
@@ -36,6 +59,10 @@ void MessageHandler::runTimerSync() {
         }
         else if (timerIndex > -1) {
             esp_now_send(addressList[timerIndex].address, (uint8_t *) &messageData, sizeof(messageData));
+        }
+        if (getLastTimerCounter() < getTimerCounter()+5 && timerIndex > -1) {
+            setUnavailable(getCurrentTimerIndex()); 
+            break;
         }
         vTaskDelay(TIMER_FREQUENCY/portTICK_PERIOD_MS);
     }

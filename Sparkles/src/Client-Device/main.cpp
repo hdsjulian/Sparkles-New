@@ -50,10 +50,10 @@ void setup()
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-    delay(1000);
+  delay(1000);
   ledInstance.setup();
-    msgHandler.setup(ledInstance);
-    ESP_LOGI("", "Setup");
+  msgHandler.setup(ledInstance);
+  ESP_LOGI("", "Setup");
 
 
   // put your setup code here, to run once:

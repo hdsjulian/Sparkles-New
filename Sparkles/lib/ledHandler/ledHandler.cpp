@@ -1,5 +1,4 @@
 #include <LedHandler.h>
-
 LedHandler::LedHandler()
 {
     configMutex = xSemaphoreCreateMutex();
@@ -44,14 +43,15 @@ void LedHandler::ledsOff() {
   
 }
 
-void LedHandler:: writeLeds(float rgb[3]) {
+void LedHandler:: writeLeds(CRGB color) {
     //ESP_LOGI("LED", "writing leds %d, %d, %d ", (int)rgb[0],(int)rgb[1], (int)rgb[2]);
-    ledcWrite(LEDPINRED1, (int)rgb[0]);
-    ledcWrite(LEDPINGREEN1, (int) rgb[1]);
-    ledcWrite(LEDPINBLUE1, (int)rgb[2]);
-    ledcWrite(LEDPINRED2,(int) rgb[0]);
-    ledcWrite(LEDPINGREEN2, (int)rgb[1]);
-    ledcWrite(LEDPINBLUE2, (int)rgb[2]);
+    ledcWrite(LEDPINRED1, color.r);
+    ledcWrite(LEDPINGREEN1, color.g);
+    ledcWrite(LEDPINBLUE1, color.b);
+    ledcWrite(LEDPINRED2, color.r);
+    ledcWrite(LEDPINGREEN2, color.g);
+    ledcWrite(LEDPINBLUE2, color.b);
+
 }
 
 void LedHandler::startLedTask()
@@ -89,33 +89,33 @@ void LedHandler::ledTask()
     animationEnum animationType = OFF;
     unsigned long long animationStart = 0;
     message_animation animationData;
-    int currentOffset;
-    int currentMode;
-    int currentPosition;
-    ESP_LOGI("LED", "Starting ledTask2");
     while (true)
     {
-        if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE)
-        {
-            int currentOffset = timerOffset;
-            int currentMode = mode;
-            int currentPosition = position;
-            xSemaphoreGive(configMutex);
-        }
         if (getCurrentAnimation() == OFF)
         {   
             ledsOff();
-            if (xQueueReceive(ledQueue, &animation, portMAX_DELAY) == pdTRUE) 
+            if (xQueueReceive(ledQueue, &animationData, portMAX_DELAY) == pdTRUE) 
             {
-                int timeSpent = micros()-animation.timeStamp;
-                handleQueue(animation, animationData, currentPosition);
-                
+                int timeSpent = micros()-animationData.timeStamp;
+                handleQueue(animation, animationData, getCurrentPosition());
+                if (animationData.animationType == STROBE) {
+                    ESP_LOGI("LED", "Strobe. Hue: %d, Saturation: %d, Brightness: %d", animation.animationParams.strobe.hue, animation.animationParams.strobe.saturation, animation.animationParams.strobe.brightness);
+                }
+                else if (animationData.animationType == BLINK) {
+                    ESP_LOGI("LED", "Blink. Hue: %d, Saturation: %.2f, Brightness: %.2f", animation.animationParams.blink.hue, animation.animationParams.blink.saturation, animation.animationParams.blink.brightness);
+                }
             }
             continue;
         }
         else {
-            if (xQueueReceive(ledQueue, &animation, 0) == pdTRUE) 
+            if (xQueueReceive(ledQueue, &animationData, 0) == pdTRUE) 
             {   
+                if (animation.animationType == STROBE) {
+                    ESP_LOGI("LED", "Strobe. Hue: %d, Saturation: %d, Brightness: %d", animation.animationParams.strobe.hue, animation.animationParams.strobe.saturation, animation.animationParams.strobe.brightness);
+                }
+                else if (animation.animationType == BLINK) {
+                    ESP_LOGI("LED", "Blink. Hue: %d, Saturation: %d, Brightness: %d", animation.animationParams.blink.hue, animation.animationParams.blink.saturation, animation.animationParams.blink.brightness);
+                }
                 if (getCurrentAnimation() != MIDI) {
                     if (animationTaskHandle != NULL) {
                         vTaskDelete(animationTaskHandle);
@@ -128,7 +128,15 @@ void LedHandler::ledTask()
                         midiTaskHandle = NULL;
                     }
                 }
-                handleQueue(animation, animationData, currentPosition);
+                ESP_LOGI("LED", "Old Anim %d", getCurrentAnimation());
+                handleQueue(animation, animationData, getCurrentPosition());
+                ESP_LOGI("LED", "Received %d", getCurrentAnimation());
+                if (animationTaskHandle != NULL) {
+                    ESP_LOGI("LED", "Animation Task Handle is not null");
+                }
+                else {
+                    ESP_LOGI("LED", "Animation Task Handle is Null");
+                }
             }
         }    
          if (getCurrentAnimation() == MIDI){   
@@ -138,7 +146,6 @@ void LedHandler::ledTask()
         }           
         else if (getCurrentAnimation() == STROBE)
             {   
-                ESP_LOGI("LED", "Received Strobe");
                 if (animationTaskHandle == NULL || eTaskGetState(animationTaskHandle) == eDeleted) {
                     xTaskCreate(runStrobeWrapper, "runStrobe", 10000, this, 1, &animationTaskHandle);
                 }
@@ -146,13 +153,8 @@ void LedHandler::ledTask()
         else if (getCurrentAnimation() == BLINK)
             {   
                 if (animationTaskHandle == NULL || eTaskGetState(animationTaskHandle) == eDeleted) {
-                    ESP_LOGI("LED", "Starting blink task");
                     xTaskCreate(runBlinkWrapper, "runBlink", 10000, this, 1, &animationTaskHandle);
                 }
-            }
-        else
-            {
-                //ESP_LOGI("LED", "Unknown animation type %d", animationData.animationType);
             }
         vTaskDelay(10/portTICK_PERIOD_MS);
     }
@@ -160,32 +162,34 @@ void LedHandler::ledTask()
 
 
 void LedHandler::handleQueue(message_animation& animation, message_animation& animationData, int currentPosition) {
-    if (animation.animationType == MIDI) {
-        addToMidiTable(midiNoteTableArray, animation, position);
+    if (animationData.animationType == MIDI) {
+        addToMidiTable(midiNoteTableArray, animationData, position);
     }
-    else if (animation.animationType == OFF) {
+    else if (animationData.animationType == OFF) {
         ledsOff();
         setCurrentAnimation(OFF);
     }
-    animationData = animation;
-    setCurrentAnimation(animation.animationType);
+    setAnimation(animationData);
+    setCurrentAnimation(animationData.animationType);
 
 }
 
 void LedHandler::runStrobe() {
-    unsigned long long microsUntilStart = animation.animationParams.strobe.startTime-micros();
+    unsigned long long microsUntilStart = animation.animationParams.strobe.startTime-getTimerOffset()-micros();
+    microsUntilStart = getTimerOffset() > 0 ? animation.animationParams.strobe.startTime-getTimerOffset()-micros() :getTimerOffset()-animation.animationParams.strobe.startTime-micros();
     TickType_t ticksUntilStart = microsToTicks(microsUntilStart);
     TickType_t currentTicks = xTaskGetTickCount();
-    unsigned long long endTimeMicros = animation.animationParams.strobe.duration+animation.animationParams.strobe.startTime;
+    unsigned long long endTimeMicros = animation.animationParams.strobe.duration*1000+microsUntilStart+micros();
     TickType_t endTimeTicks = microsToTicks(endTimeMicros);
-
-    vTaskDelayUntil(&currentTicks, ticksUntilStart);
+    ESP_LOGI("LED", "Strobe Task Started: Hue: %d, Saturation: %d, Value %d", animation.animationParams.strobe.hue, animation.animationParams.strobe.saturation, animation.animationParams.strobe.brightness);
+    ESP_LOGI("LED", "waiting until %llu", microsUntilStart);
+    ESP_LOGI("LED", "Ticks until start: %d", ticksUntilStart);
+      vTaskDelayUntil(&currentTicks, ticksUntilStart);
     ledsOff();
     float rgb[3];
-    ESP_LOGI("LED", "Starting in %d", microsUntilStart);
     while (true) {
-        hsv2rgb(animation.animationParams.strobe.hue, animation.animationParams.strobe.saturation, animation.animationParams.strobe.brightness, rgb);
-        writeLeds(rgb);
+        CRGB color = CHSV(animation.animationParams.strobe.hue, animation.animationParams.strobe.saturation, animation.animationParams.strobe.brightness);
+        writeLeds(color);
         vTaskDelay(1000/animation.animationParams.strobe.frequency);
         if (xTaskGetTickCount() >= endTimeTicks) {
             ledsOff();
@@ -202,6 +206,13 @@ void LedHandler::runStrobe() {
 }
 
 void LedHandler::runBlink() {
+    message_animation animation = getAnimation();
+    float hue = animation.animationParams.blink.hue;
+    float saturation = animation.animationParams.blink.saturation;
+    float value = animation.animationParams.blink.brightness;
+    CRGB color = CHSV(hue, saturation, value);
+    ESP_LOGI("LED", "Red: %d, Green: %d, Blue: %d", color.r, color.g, color.b);
+    ESP_LOGI("LED", "Blink Task Started: Hue: %d, Saturation: %d, Value %d", animation.animationParams.blink.hue, animation.animationParams.blink.saturation, animation.animationParams.blink.brightness);
     if (animation.animationParams.blink.startTime > micros()) {
         unsigned long long microsUntilStart = animation.animationParams.blink.startTime-micros();
         TickType_t ticksUntilStart = microsToTicks(microsUntilStart);
@@ -209,9 +220,10 @@ void LedHandler::runBlink() {
         vTaskDelayUntil(&currentTicks, ticksUntilStart);
     }
     float rgb[3];
+
     for (int i = 0; i < animation.animationParams.blink.repetitions; i++) {
-        hsv2rgb(animation.animationParams.blink.hue, animation.animationParams.blink.saturation, animation.animationParams.blink.brightness, rgb);
-        writeLeds(rgb);
+
+        writeLeds(color);
         vTaskDelay(animation.animationParams.blink.duration);
         ledsOff();
         vTaskDelay(animation.animationParams.blink.duration);
@@ -221,13 +233,12 @@ void LedHandler::runBlink() {
     vTaskDelete(NULL);
     
 }
-void LedHandler::pushToAnimationQueue(message_animation animation)
+void LedHandler::pushToAnimationQueue(message_animation& animation)
 {   
-    //ESP_LOGI("MSG", "ONE");
-    xQueueSend(ledQueue, &animation, 0);
+    if (xQueueSend(ledQueue, &animation, portMAX_DELAY) != pdTRUE) {
+        ESP_LOGE("LED", "Failed to send animation to queue");
+    }
 }
-
-
 
 void placeholder(int octave, int octaveDistance, float distanceFactor, float currentBrightness, float midiDecayFactor, float note) {
     ESP_LOGI("PLACEHOLDER", "octave: %d, octaveDistance: %d, distanceFactor: %.2f, currentBrightness: %.2f, midiDecayFactor: %.2f, note: %.2f", octave, octaveDistance, distanceFactor, currentBrightness, midiDecayFactor, note);
@@ -290,15 +301,13 @@ void LedHandler::runMidi()
             vTaskDelete(NULL);
         }
         else {
-            float rgb[3];
-            hsv2rgb(max(midiHue + huemod, 0.0f), midiSat + satmod, brightness / 127, rgb);
+            CRGB color = CHSV(max(midiHue + huemod, 0.0f) * 255, (midiSat + satmod) * 255, brightness*2);
+
 
             if (newBrightness == true)
             {   
-                ESP_LOGI("LED", "Hue: %.2f, Saturation: %.2f, Brightness: %.2f", midiHue, midiSat, brightness / 127);
-                ESP_LOGI("LED", "Brightness: %.2f, rgb: %d, %d, %d", brightness, (int)rgb[0], (int)rgb[1], (int)rgb[2]);
             }
-            writeLeds(rgb);
+            writeLeds(color);
         }
         vTaskDelay((1000/FPS)/portTICK_PERIOD_MS);
     }
@@ -317,7 +326,8 @@ void LedHandler::runBlinkOld() {
         currentRgb[1] = (targetRgb[1] / steps) * i;
         currentRgb[2] = (targetRgb[2] / steps) * i;
         //ESP_LOGI("LED", "Brightness: %.2f, rgb: %d, %d, %d", (float)i, (int)currentRgb[0], (int)currentRgb[1], (int)currentRgb[2]);
-        writeLeds(currentRgb);
+        CRGB color = CRGB(currentRgb[0], currentRgb[1], currentRgb[2]);
+        writeLeds(color);
         vTaskDelay(pdMS_TO_TICKS(delayTime));
     }
 
@@ -326,7 +336,8 @@ void LedHandler::runBlinkOld() {
         currentRgb[0] = (targetRgb[0] / steps) * i;
         currentRgb[1] = (targetRgb[1] / steps) * i;
         currentRgb[2] = (targetRgb[2] / steps) * i;
-        writeLeds(currentRgb);
+        CRGB color = CRGB(currentRgb[0], currentRgb[1], currentRgb[2]);
+        writeLeds(color);
         vTaskDelay(pdMS_TO_TICKS(delayTime));
     }
 }

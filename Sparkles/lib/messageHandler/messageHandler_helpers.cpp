@@ -89,3 +89,88 @@ void MessageHandler::removePeer(uint8_t address[6]) {
 unsigned long long MessageHandler::timeDiffAbs(unsigned long long a, unsigned long long b) {
     return (a > b) ? (a - b) : (b - a);
 }
+
+
+bool MessageHandler::readStructsFromFile(client_address* data, int count, const char* filename) {
+    File file;
+    if (!LittleFS.exists(filename)) {
+        ESP_LOGE("FS", "File does not exist");
+        file = LittleFS.open(filename, "w");
+        if (!file) {
+            ESP_LOGE("FS", "Failed to create file");
+            return false;
+        }
+    }
+    else {
+        file = LittleFS.open(filename, "r");
+        if (!file) {
+            ESP_LOGE("FS", "Failed to open file for reading");
+            return false;
+        }
+    }
+    size_t totalSize = count * sizeof(client_address);
+    
+    // Check if the file is large enough
+    if (file.size() < totalSize) {
+
+        ESP_LOGE("FS", "File size is too small");
+        file.close();
+        return false;
+    }
+    else {
+        ESP_LOGI("FS", "File size is large enough");
+    }
+    for (int i = 0; i < count; i++) {
+        size_t bytesRead = file.read((uint8_t*)&data[i], sizeof(client_address));
+        if (bytesRead != sizeof(client_address)) {
+            ESP_LOGE("FS", "Failed to read complete structure at %d", i);
+            file.close();
+            return false;
+        }
+    }
+    
+    // Check if the file is large enough
+
+    file.close();
+    return true;
+
+}
+
+void MessageHandler::writeStructsToFile(client_address* data, int count, const char* filename) {
+    if (!LittleFS.exists(filename)) {
+        ESP_LOGE("FS", "File does not exist");
+    }
+    File file = LittleFS.open(filename, "w");
+    if (!file) {
+        ESP_LOGE("FS", "Failed to open file for writing");
+        return;
+        
+    }
+    for (int i = 0; i < count; i++) {
+        file.write((uint8_t*)&data[i], sizeof(client_address));
+    }
+    file.close();
+}
+
+
+
+float MessageHandler::getBatteryPercentage() {
+    analogReadResolution(12);
+    analogSetPinAttenuation(BATTERY_PIN, ADC_11db);  
+    int adcValue = analogRead(BATTERY_PIN); // Read the ADC value
+    float voltage = adcValue * (4.2 / 3220.0);
+    float percentage;
+    if (voltage >= 4.2) {
+        percentage = 100.0;
+    } else if (voltage >= 3.8 && voltage < 4.2) {
+        percentage =  70.0 + (voltage - 3.8) / (4.2 - 3.8) * (100.0 - 70.0);
+    } else if (voltage >= 3.6 && voltage < 3.8) {
+        percentage = 15.0 + (voltage - 3.6) / (3.8 - 3.6) * (70.0 - 15.0);
+    } else if (voltage >= 3.0 && voltage < 3.6) {
+        percentage =  (voltage - 3.0) / (3.6 - 3.0) * 15.0;
+    } else {
+        percentage = 0.0;
+    }
+    percentage = round(percentage * 100) / 100;
+    return percentage;
+}

@@ -27,8 +27,13 @@ void MessageHandler::setup(LedHandler &globalLedInstance) {
     #endif
     esp_now_register_send_cb(onDataSent);
     esp_now_register_recv_cb(onDataRecv);
+    #if (DEVICE_MODE == MASTER)
+        ESP_LOGI("MSG", "Master setup");
+        handleAddressStruct();
+    #endif
     
 }
+
 
 
 void MessageHandler::pushToRecvQueue(const esp_now_recv_info *mac, const uint8_t *incomingData, int len) {

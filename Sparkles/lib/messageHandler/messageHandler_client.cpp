@@ -14,8 +14,20 @@ void MessageHandler::handleReceive() {
                 handleTimer(incomingData);            
             
             if (incomingData.messageType == MSG_ANIMATION) {
-                message_animation animation = (message_animation)incomingData.payload.animation;
-                ledInstance->pushToAnimationQueue(animation);
+                float batteryPercentage = getBatteryPercentage();
+                if (batteryPercentage < 5) {
+                    message_data batteryLow;
+                    ESP_LOGI("MSG", "Battery low, percentage: %f", batteryPercentage);
+                    batteryLow.messageType = MSG_STATUS;
+                    batteryLow.payload.status.batteryPercentage = getBatteryPercentage();
+                    memcpy(batteryLow.address, hostAddress, 6);
+                    xQueueSend(sendQueue, &batteryLow, portMAX_DELAY);
+                    continue;
+                }
+                else {
+                    message_animation animation = (message_animation)incomingData.payload.animation;
+                    ledInstance->pushToAnimationQueue(animation);
+                }
             }
             else if (incomingData.messageType == MSG_TIMER) {
                 handleTimer(incomingData);
@@ -45,6 +57,7 @@ void MessageHandler::handleTimer(message_data incomingData) {
             message_data gotTimerMessage;
             gotTimerMessage.messageType = MSG_GOT_TIMER;
             gotTimerMessage.payload.gotTimer.delayAverage = delayAverage;
+            gotTimerMessage.payload.gotTimer.batteryPercentage = getBatteryPercentage();
             memcpy(gotTimerMessage.address, hostAddress, 6);
             ESP_LOGI("MSG", "Delay average: %d", delayAverage);
             setTimeOffset(timerMessage.sendTime, timerMessage.receiveTime, delayAverage);
@@ -55,12 +68,17 @@ void MessageHandler::handleTimer(message_data incomingData) {
             animation.animationParams.blink.duration = 300;
             animation.animationParams.blink.startTime = micros();
             animation.animationParams.blink.repetitions = 3;
-            animation.animationParams.blink.hue = 120.0f / 360.0f;
-            animation.animationParams.blink.saturation = 1.0f;
-            animation.animationParams.blink.brightness = 0.5f;
+            animation.animationParams.blink.hue = 100;
+            animation.animationParams.blink.saturation = 255;
+            animation.animationParams.blink.brightness = 127;
+            ESP_LOGI("MSG", "Animation Type: %d", animation.animationType);
+            ESP_LOGI("MSG", "...");
             ledInstance->pushToAnimationQueue(animation);
             ESP_LOGI("MSG", "Timer set. time offset: %lld", getTimeOffset());
           }
+    }
+    else {
+        ESP_LOGI("MSG", "Time diff too large %lld or delay too large  %d", timeDiff, timerMessage.lastDelay);
     }
     setLastReceiveTime(timerMessage.receiveTime);
 
@@ -120,9 +138,10 @@ void MessageHandler::handleSend() {
                     esp_now_send(messageData.address, (uint8_t *) &messageData, sizeof(messageData));
                     break;
                 case MSG_ADDRESS:
-                    ESP_LOGI("MSG", "Sending address");
                     esp_now_send(messageData.address, (uint8_t *) &messageData, sizeof(messageData));
-                    ESP_LOGI("MSG", "Address sent");
+                    break;
+                case MSG_STATUS:
+                    esp_now_send(messageData.address, (uint8_t *) &messageData, sizeof(messageData));
                     break;
                 default:
                     break;

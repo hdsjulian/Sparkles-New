@@ -32,9 +32,11 @@ const float version = 1.0;
 #define OCTAVE 12
 #define OCTAVESONKEYBOARD 8
 
+
+
 //config variables
 #define NUM_CLIENTS 200
-#define TIMER_FREQUENCY 500
+#define TIMER_FREQUENCY 100
 #define TIMER_ARRAY_COUNT 10
 #define WIFI_SSID "SPARKLES"
 #define WIFI_PASSWORD "sparklesAdmin"
@@ -79,7 +81,7 @@ static constexpr uint8_t broadcastAddress[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x
 #endif
 
 
-
+#define BATTERY_PIN 4
 #define AUDIO_PIN 5
 #define NUM_DEVICES 180
 #define NUM_CLAPS 20
@@ -87,6 +89,7 @@ static constexpr uint8_t broadcastAddress[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x
 #define MSG_ADDRESS 1
 #define MSG_TIMER 2
 #define MSG_GOT_TIMER 3
+#define MSG_STATUS 4
 #define MSG_ANIMATION 5
 #define MSG_SEND_CLAP_TIMES 6
 enum activeStatus {
@@ -143,6 +146,7 @@ struct client_address {
   float batteryPercentage;
   int tries;
   float distanceFromCenter;
+  unsigned long lastUpdateTime;
 } ;
 
 
@@ -157,9 +161,9 @@ struct animation_strobe {
   uint8_t frequency;
   unsigned long long startTime;
   int duration;
-  float hue;
-  float saturation;
-  float brightness;
+  int hue;
+  int saturation;
+  int brightness;
   animation_strobe() : frequency(0), startTime(0), duration(0), hue(0), saturation(0), brightness(0) {}
 };
 
@@ -167,9 +171,9 @@ struct animation_blink {
   uint8_t repetitions;
   int duration;
   unsigned long long startTime;
-  float hue;
-  float saturation;
-  float brightness;
+  int hue;
+  int saturation;
+  int brightness;
   animation_blink() : repetitions(0), duration(0), startTime(0), hue(0), saturation(0), brightness(0) {}
 };
 
@@ -200,9 +204,15 @@ struct message_animation {
 struct message_got_timer{
   uint8_t messageType = MSG_GOT_TIMER;
   int delayAverage;
+  float batteryPercentage;
   message_got_timer() : messageType(MSG_GOT_TIMER), delayAverage(0) {}
 };
 
+struct message_status {
+  uint8_t messageType = MSG_STATUS;
+  float batteryPercentage;
+  message_status() : messageType(0), batteryPercentage(0.0) {}
+};
      
 struct message_timer {
   uint8_t messageType = MSG_TIMER;
@@ -222,6 +232,7 @@ union message_payload {
   struct message_animation animation;
   struct message_send_clap_times clapTimes;
   struct message_got_timer gotTimer;
+  struct message_status status;
 
   message_payload() {}
   ~message_payload() {}

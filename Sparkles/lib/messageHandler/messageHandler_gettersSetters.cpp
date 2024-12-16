@@ -125,6 +125,7 @@ int MessageHandler::addOrGetAddressId(uint8_t * address) {
         }
         if (memcmp(addressList[i].address, emptyAddress, 6) == 0) {
             memcpy(addressList[i].address, address, 6);
+            setNumDevices(i+1);
             return i;
         }
     }
@@ -142,8 +143,8 @@ void MessageHandler::setTimeOffset(unsigned long long sendTime, unsigned long lo
             offsetMultiplier = 1;
         }
         xSemaphoreGive(configMutex);
-
     }
+    ledInstance->setTimerOffset(timeOffset);
 }
  long long MessageHandler::getTimeOffset() {
      long long returnOffset;
@@ -167,4 +168,90 @@ unsigned long long MessageHandler::getLastReceiveTime() {
         xSemaphoreGive(configMutex);
     }
     return returnTime;
+}
+
+bool MessageHandler::getTimerReset() {
+    bool returnReset;
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        returnReset = timerReset;
+        xSemaphoreGive(configMutex);
+    }
+    return returnReset;
+}
+void MessageHandler::setTimerReset(bool set) {
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        timerReset = set;
+        xSemaphoreGive(configMutex);
+    }
+}
+
+int MessageHandler::incrementTimerCounter() {
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        timerCounter++;
+        xSemaphoreGive(configMutex);
+    }
+    return timerCounter;
+}
+int MessageHandler::getTimerCounter() {
+    int returnCounter;
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        returnCounter = timerCounter;
+        xSemaphoreGive(configMutex);
+    }
+    return returnCounter;
+}
+void MessageHandler::setTimerCounter(int counter) {
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        timerCounter = counter;
+        xSemaphoreGive(configMutex);
+    }
+}
+int MessageHandler::getLastTimerCounter() {
+    int returnCounter;
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        returnCounter = lastTimerCounter;
+        xSemaphoreGive(configMutex);
+    }
+    return returnCounter;
+}
+
+void MessageHandler::setLastTimerCounter() {
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        lastTimerCounter = timerCounter;
+        xSemaphoreGive(configMutex);
+    }
+}
+
+void MessageHandler::setUnavailable(int index) {
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        addressList[index].active = INACTIVE;
+        addressList[index].tries++;
+        if (addressList[index].tries > 3) {
+            addressList[index].active = UNREACHABLE;
+        }
+        xSemaphoreGive(configMutex);
+    }
+}
+activeStatus MessageHandler::getActiveStatus(int index) {
+    activeStatus returnStatus;
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        returnStatus = addressList[index].active;
+        xSemaphoreGive(configMutex);
+    }
+    return returnStatus;
+}
+
+void MessageHandler::setNumDevices(int num) {
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        numDevices = num;
+        xSemaphoreGive(configMutex);
+    }
+}
+int MessageHandler::getNumDevices() {
+    int returnNum;
+    if (xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
+        returnNum = numDevices;
+        xSemaphoreGive(configMutex);
+    }
+    return returnNum;
 }

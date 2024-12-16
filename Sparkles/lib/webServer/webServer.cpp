@@ -14,7 +14,6 @@ WebServer& WebServer::getInstance(FS* fs) {
 }
 
 void WebServer::setup(MessageHandler &globalMessageHandler) {
-  debugVariable++;
     setWifi();
     configRoutes(); 
     messageHandlerInstance = &globalMessageHandler;
@@ -110,13 +109,16 @@ void WebServer::configRoutes() {
      server.on("/setSyncAsyncParams", HTTP_GET, [this] (AsyncWebServerRequest *request){ 
       this->setSyncAsyncParams(request);
     });   
-
+    server.on("/getAddressList", HTTP_GET, [this] (AsyncWebServerRequest *request){
+      this->getAddressList(request);
+    });
       server.on("/getParamsJson", HTTP_GET, [this] (AsyncWebServerRequest *request){
       String jsonString;
       jsonString = "TO FIX";
       //jsonString = messageHandlerInstance->getLedHandlerParams();
       request->send(200, "text/html", jsonString.c_str());
     });
+
 
 }
 
@@ -163,9 +165,14 @@ void WebServer::serveStaticFile(AsyncWebServerRequest *request) {
   // Check if the file exists
   if (path == "/" || path == "/index.html") { // Modify this condition as needed
     path = "/addressList.html"; // Adjust the file path here
+    ESP_LOGI("WEB", "Serving AddressList.html");
+  }
+  else {
+    ESP_LOGI("WEB", "Serving %s", path);
   }
   // Check if the file exists
   if (LittleFS.exists(path)) {
+    ESP_LOGI("WEB", "File exists, %s", path);
       // Open the file for reading
       File file = LittleFS.open(path, "r");
       if (file) {
@@ -186,14 +193,16 @@ void WebServer::serveStaticFile(AsyncWebServerRequest *request) {
         // Close the file
         file.close();
 
+
         // Send the file content as response
-        
+        ESP_LOGI("WEB", "SENDING 200");
         request->send(200, contentType, fileContent);
         return;
       }
   }
 
   // If file not found, send 404
+  ESP_LOGI("WEB", "SENDING 404");
   request->send(404, "text/plain", "File not found");
 }
 
@@ -265,13 +274,13 @@ void WebServer::testAnim(AsyncWebServerRequest *request) {
   msg.messageType = MSG_ANIMATION;
   memcpy (&msg.address, broadcastAddress, sizeof(broadcastAddress));
   msg.payload.animation.animationType = STROBE;
-  msg.payload.animation.animationParams.strobe.brightness = 1.0f;
-  msg.payload.animation.animationParams.strobe.duration = 3000;
+  msg.payload.animation.animationParams.strobe.brightness = 255;
+  msg.payload.animation.animationParams.strobe.duration = 10000;
   msg.payload.animation.animationParams.strobe.frequency = 15;
-  msg.payload.animation.animationParams.strobe.hue = 0.0f;
-  msg.payload.animation.animationParams.strobe.saturation = 0.0f;
-  msg.payload.animation.animationParams.strobe.brightness = 1.0f;
-  msg.payload.animation.animationParams.strobe.startTime = micros()+1000000;
+  msg.payload.animation.animationParams.strobe.hue = 0;
+  msg.payload.animation.animationParams.strobe.saturation = 0;
+  msg.payload.animation.animationParams.strobe.brightness = 255;
+  msg.payload.animation.animationParams.strobe.startTime = micros()+3000000;
   messageHandlerInstance->pushToSendQueue(msg);
   request->send(200, "text/html", "OK");
 }
@@ -283,6 +292,43 @@ void WebServer::statusUpdate(AsyncWebServerRequest *request) {
 void WebServer::statusUpdate() {
   String returnString = "{\"status\":\"stateMachine->modeToText(stateMachine->getMode())\"}";
   events.send(returnString.c_str(), "statusUpdate");
+}
+
+
+void WebServer::getAddressList(AsyncWebServerRequest *request) {
+
+  String jsonString =  "[";
+  request->send(200, "text/html", jsonString.c_str());
+  return;
+  for (int i = 0; i < NUM_DEVICES; i++) {
+    if (memcmp(messageHandlerInstance->getItemFromAddressList(i).address, messageHandlerInstance->emptyAddress, 6) == 0) {
+      break;
+    }
+    jsonString += "{\"numAddresses\":\"";
+    jsonString += String(messageHandlerInstance->getNumDevices());
+    
+    jsonString += ", {\"id\":\"";
+    jsonString += String(i);
+    jsonString += "\",\"address\":\"";
+    for (int j = 0; j < 6; j++) {
+      jsonString += String(messageHandlerInstance->getItemFromAddressList(i).address[j], HEX);
+      if (j < 5) {
+        jsonString += ":";
+      }
+    }
+    jsonString += "\",\"status\":\"";
+    jsonString += messageHandlerInstance->getActiveStatus(i) == ACTIVE ? "active" : "inactive";
+    jsonString += "\",\"battery\":\"";
+    jsonString += String(messageHandlerInstance->getItemFromAddressList(i).batteryPercentage);
+    jsonString += "\"}";
+    if (i < NUM_DEVICES-1) {
+      jsonString += ",";
+    }
+  }
+  jsonString += "}}]";
+  //jsonString = messageHandlerInstance->getLedHandlerParams();
+  request->send(200, "text/html", jsonString.c_str());
+  ESP_LOGI("WEB", "AddressList: %s", jsonString.c_str());
 }
 
 void WebServer::commandGoodNight(AsyncWebServerRequest *request) {

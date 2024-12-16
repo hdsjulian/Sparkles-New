@@ -5,6 +5,28 @@
 #include "esp_now.h"
 #include "WiFi.h"
 
+
+void MessageHandler::handleAddressStruct() {
+    if (!readStructsFromFile(addressList, NUM_DEVICES,  "/clientAddress")) {
+        ESP_LOGE("FS", "Failed to read client addresses from file");
+    }
+    for (int i = 0; i < NUM_DEVICES; i++) {
+        if (memcmp(addressList[i].address, emptyAddress, 6) == 0) {
+            ESP_LOGI("FS", "Empty address found at %d", i);
+            break;
+        }
+        else {
+            addressList[i].active = INACTIVE;
+            addressList[i].batteryPercentage = 0;
+            addressList[i].lastUpdateTime = 0;
+            ESP_LOGI("FS", "Address found at %d", i);
+            ESP_LOGI("FS", "Address: %02x:%02x:%02x:%02x:%02x:%02x", addressList[i].address[0], addressList[i].address[1], addressList[i].address[2], addressList[i].address[3], addressList[i].address[4], addressList[i].address[5]);
+        }
+    } 
+}
+
+
+
 void MessageHandler::handleReceive() {
     message_data incomingData;
     
@@ -32,11 +54,25 @@ void MessageHandler::handleReceive() {
                 removePeer(addressList[getCurrentTimerIndex()].address);
                 timerSyncHandle = NULL;
                 setCurrentTimerIndex(-1);
+                addressList[getCurrentTimerIndex()].active = ACTIVE;
+                addressList[getCurrentTimerIndex()].batteryPercentage = incomingData.payload.gotTimer.batteryPercentage;
+                addressList[getCurrentTimerIndex()].lastUpdateTime = millis();
+                setSettingTimer(false);
+                writeStructsToFile(addressList, NUM_DEVICES, "/clientAddress");
 
+            }
+            else if (incomingData.messageType == MSG_STATUS) {
+                for (int i = 0; i < NUM_DEVICES; i++) {
+                    if (memcmp(addressList[i].address, incomingData.address, 6) == 0) {
+                        addressList[i].batteryPercentage = incomingData.payload.status.batteryPercentage;
+                        addressList[i].lastUpdateTime = millis();
+                        break;
+                    }
+                }
+                writeStructsToFile(addressList, NUM_DEVICES, "/clientAddress");
             }
             else {
                 ESP_LOGI("MSG", "Unknown message type ");
-
             }
         }
     }
@@ -63,6 +99,8 @@ void MessageHandler::onDataSent(const uint8_t *mac_addr, esp_now_send_status_t s
     MessageHandler& instance = getInstance();
     if (status == ESP_NOW_SEND_SUCCESS) {
         if (instance.getSettingTimer() == true) {
+            instance.setTimerReset(false);
+            instance.setLastTimerCounter();
             if (memcmp(mac_addr, instance.getItemFromAddressList(instance.getCurrentTimerIndex()).address, 6) == 0) {
                 instance.setLastDelay(micros() - instance.getLastSendTime());   
             }

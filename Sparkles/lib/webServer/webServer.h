@@ -55,6 +55,7 @@ class WebServer {
         void sendSyncAsyncAnimation(AsyncWebServerRequest *request);
         void statusUpdate(AsyncWebServerRequest *request);
         void statusUpdate();
+        void getAddressList(AsyncWebServerRequest *request);
         void setNeutral(AsyncWebServerRequest *request);
         void triggerSync(AsyncWebServerRequest *request);
         void testAnim(AsyncWebServerRequest *request);
