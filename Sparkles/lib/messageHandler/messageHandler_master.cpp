@@ -1,9 +1,10 @@
-#include "messageHandler.h"
+#include "MessageHandler.h"
 
 #if DEVICE_MODE == MASTER
 #include "Arduino.h"
 #include "esp_now.h"
 #include "WiFi.h"
+
 
 
 void MessageHandler::handleAddressStruct() {
@@ -53,12 +54,15 @@ void MessageHandler::handleReceive() {
                 vTaskDelete(timerSyncHandle);
                 removePeer(addressList[getCurrentTimerIndex()].address);
                 timerSyncHandle = NULL;
-                setCurrentTimerIndex(-1);
                 addressList[getCurrentTimerIndex()].active = ACTIVE;
                 addressList[getCurrentTimerIndex()].batteryPercentage = incomingData.payload.gotTimer.batteryPercentage;
+                ESP_LOGI("MSG", "Battery Percentage %.2f",incomingData.payload.gotTimer.batteryPercentage );
                 addressList[getCurrentTimerIndex()].lastUpdateTime = millis();
+                setCurrentTimerIndex(-1);
                 setSettingTimer(false);
                 writeStructsToFile(addressList, NUM_DEVICES, "/clientAddress");
+                //WebServer* webServerInstance = WebServer::getInstance();
+                //webServerInstance->updateAddress();
 
             }
             else if (incomingData.messageType == MSG_STATUS) {

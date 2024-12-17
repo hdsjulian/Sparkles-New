@@ -8,7 +8,7 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include "../../include/myDefines.h"
-#include <messageHandler.h>
+#include <MessageHandler.h>
 #include <queue>
 #include <mutex>
 #include <cstdint>
@@ -16,26 +16,20 @@
 
 class WebServer {
     private:
-        int msgType;
-        String outputJson;
-        int calibrationStatus;
-        bool connected = false;
-        bool isSetup = false;
         MessageHandler* messageHandlerInstance = nullptr;
         FS* filesystem;
-        int debugVariable = 0;
         AsyncWebServer server;
         AsyncEventSource events;
         WebServer(FS* fs);
+        bool connected = false;
     public:
         static WebServer& getInstance(FS* fs);
         WebServer(const WebServer&) = delete;
         WebServer& operator=(const WebServer&) = delete;
-        int counter = 0;
         bool PdParamsChanged = false;
         void setup(MessageHandler &globalMessageHandler);
         void setWifi();
-        void serveStaticFile(AsyncWebServerRequest *request);
+        
         void configRoutes();
         void handleClientConnect(AsyncEventSourceClient *client);
         void commandAnimate(AsyncWebServerRequest *request);
@@ -64,8 +58,12 @@ class WebServer {
         void setFull();
         void resetSystem(AsyncWebServerRequest *request);
         void setSyncAsyncParams(AsyncWebServerRequest *request);
+        void serveOnNotFound(AsyncWebServerRequest *request);
+        String jsonFromAddress(int id);
+        void updateAddress(client_address address);
         void begin();
         void end();
+        void updateAddress(int id);
 
 };
 #endif

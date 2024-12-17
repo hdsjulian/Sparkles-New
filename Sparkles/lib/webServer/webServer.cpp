@@ -1,6 +1,6 @@
-#include <webserver.h>
 #include "../../include/myDefines.h"
-#include <webServer.h>
+#include <WebServer.h>
+#include <MessageHandler.h>
 
 
 
@@ -42,9 +42,7 @@ void WebServer::configRoutes() {
     // and set reconnect delay to 1 second
     this->handleClientConnect(client);
   });
-    server.onNotFound([this](AsyncWebServerRequest *request) {
-        this->serveStaticFile(request);
-    });
+
 
     server.on("/commandCalibrate", HTTP_GET, [this] (AsyncWebServerRequest *request){
       this->commandCalibrate(request);
@@ -100,9 +98,6 @@ void WebServer::configRoutes() {
     server.on("/resetSystem", HTTP_GET, [this] (AsyncWebServerRequest *request){
     this->resetSystem(request);
     });
-    server.on("/updateCalibrationStatus", HTTP_GET, [this] (AsyncWebServerRequest *request){
-    this->updateCalibrationStatus(request);
-    });
     server.on("/submitPdParams", HTTP_GET, [this] (AsyncWebServerRequest *request){ 
       this->submitPdParams(request);
     });   
@@ -119,6 +114,11 @@ void WebServer::configRoutes() {
       request->send(200, "text/html", jsonString.c_str());
     });
 
+      server.onNotFound([this](AsyncWebServerRequest *request) {
+        this->serveOnNotFound(request);
+    });
+    server.serveStatic("/", LittleFS, "/");
+
 
 }
 
@@ -127,12 +127,15 @@ void WebServer::handleClientConnect(AsyncEventSourceClient *client) {
     client->send("");
 }
 
+void WebServer::serveOnNotFound(AsyncWebServerRequest *request) {
+  String requestedFile = "Not Found: "+request->url();
+    request->send(404, "text/plain", requestedFile.c_str());
+}
+
 
 void WebServer::commandCalibrate(AsyncWebServerRequest *request) {
 }
 
-void WebServer::updateCalibrationStatus(AsyncWebServerRequest *request) {
-}
 
 void WebServer::endCalibration(AsyncWebServerRequest *request) {
 }
@@ -158,53 +161,6 @@ void WebServer::triggerSync(AsyncWebServerRequest *request) {
     request->send(200, "text/html", "OK");
 }
 
-void WebServer::serveStaticFile(AsyncWebServerRequest *request) {
-  // Get the file path from the request
-  String path = request->url();
-
-  // Check if the file exists
-  if (path == "/" || path == "/index.html") { // Modify this condition as needed
-    path = "/addressList.html"; // Adjust the file path here
-    ESP_LOGI("WEB", "Serving AddressList.html");
-  }
-  else {
-    ESP_LOGI("WEB", "Serving %s", path);
-  }
-  // Check if the file exists
-  if (LittleFS.exists(path)) {
-    ESP_LOGI("WEB", "File exists, %s", path);
-      // Open the file for reading
-      File file = LittleFS.open(path, "r");
-      if (file) {
-      String contentType = "text/plain"; // Default Content-Type
-      if (path.endsWith(".html") || path.endsWith(".htm")) {
-        contentType = "text/html";
-      } else if (path.endsWith(".css")) {
-        contentType = "text/css";
-      } else if (path.endsWith(".js")) {
-        contentType = "application/javascript";
-      } 
-        // Read the contents of the file into a String
-        String fileContent;
-        while (file.available()) {
-          fileContent += char(file.read());
-        }
-
-        // Close the file
-        file.close();
-
-
-        // Send the file content as response
-        ESP_LOGI("WEB", "SENDING 200");
-        request->send(200, contentType, fileContent);
-        return;
-      }
-  }
-
-  // If file not found, send 404
-  ESP_LOGI("WEB", "SENDING 404");
-  request->send(404, "text/plain", "File not found");
-}
 
 void WebServer::submitPositions(AsyncWebServerRequest *request) {
   float xpos = request->getParam("xpos")->value().toFloat();
@@ -297,38 +253,64 @@ void WebServer::statusUpdate() {
 
 void WebServer::getAddressList(AsyncWebServerRequest *request) {
 
-  String jsonString =  "[";
-  request->send(200, "text/html", jsonString.c_str());
-  return;
+  String jsonString =  "";
+  jsonString += "{\"numDevices\":";
+  jsonString += String(messageHandlerInstance->getNumDevices());
+  if (request->hasParam("id")) {
+    int id = request->getParam("id")->value().toInt();
+    jsonString += ", \"addresses\":[";
+    jsonString += jsonFromAddress(id);
+    jsonString += "]}";
+    request->send(200, "text/html", jsonString.c_str());
+    return;
+  }
   for (int i = 0; i < NUM_DEVICES; i++) {
+    if (i == 0) {
+      jsonString += ", \"addresses\":[";
+    }
     if (memcmp(messageHandlerInstance->getItemFromAddressList(i).address, messageHandlerInstance->emptyAddress, 6) == 0) {
+      jsonString += "]}";
       break;
     }
-    jsonString += "{\"numAddresses\":\"";
-    jsonString += String(messageHandlerInstance->getNumDevices());
-    
-    jsonString += ", {\"id\":\"";
-    jsonString += String(i);
+    if (i > 0) {
+      jsonString +=", ";
+    }
+    jsonString += jsonFromAddress(i);
+
+
+  }
+  //jsonString = messageHandlerInstance->getLedHandlerParams();
+  request->send(200, "text/html", jsonString.c_str());
+  ESP_LOGI("WEB", "AddressList: %s", jsonString.c_str());
+}
+
+void WebServer::updateAddress(int id) {
+  String jsonString = jsonFromAddress(id);
+  events.send(jsonString.c_str(), "addressUpdate");
+  ESP_LOGI("WEB", "Address Update: %s", jsonString.c_str());
+
+}
+String WebServer::jsonFromAddress(int id) {
+  client_address address = messageHandlerInstance->getItemFromAddressList(id);
+  String jsonString = "";
+    jsonString += "{\"id\":\"";
+    jsonString += String(id);
     jsonString += "\",\"address\":\"";
     for (int j = 0; j < 6; j++) {
-      jsonString += String(messageHandlerInstance->getItemFromAddressList(i).address[j], HEX);
+      jsonString += String(address.address[j], HEX);
       if (j < 5) {
         jsonString += ":";
       }
     }
     jsonString += "\",\"status\":\"";
-    jsonString += messageHandlerInstance->getActiveStatus(i) == ACTIVE ? "active" : "inactive";
+    jsonString += address.active == ACTIVE ? "active" : "inactive";
+    ESP_LOGI("WEB", "Active Status %d", address.active );
     jsonString += "\",\"battery\":\"";
-    jsonString += String(messageHandlerInstance->getItemFromAddressList(i).batteryPercentage);
+    jsonString += String(address.batteryPercentage);
+    jsonString += "\", \"distane\":\"";
+    jsonString += String(address.distanceFromCenter);
     jsonString += "\"}";
-    if (i < NUM_DEVICES-1) {
-      jsonString += ",";
-    }
-  }
-  jsonString += "}}]";
-  //jsonString = messageHandlerInstance->getLedHandlerParams();
-  request->send(200, "text/html", jsonString.c_str());
-  ESP_LOGI("WEB", "AddressList: %s", jsonString.c_str());
+    return jsonString;
 }
 
 void WebServer::commandGoodNight(AsyncWebServerRequest *request) {

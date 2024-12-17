@@ -1,5 +1,5 @@
 
-#include "messageHandler.h"
+#include "MessageHandler.h"
 #if (DEVICE_MODE == CLIENT) 
 #include "Arduino.h"
 #include "esp_now.h"
@@ -20,6 +20,7 @@ void MessageHandler::handleReceive() {
                     ESP_LOGI("MSG", "Battery low, percentage: %f", batteryPercentage);
                     batteryLow.messageType = MSG_STATUS;
                     batteryLow.payload.status.batteryPercentage = getBatteryPercentage();
+                    ESP_LOGI("MSG", "Battery percentage: %f", batteryLow.payload.status.batteryPercentage);
                     memcpy(batteryLow.address, hostAddress, 6);
                     xQueueSend(sendQueue, &batteryLow, portMAX_DELAY);
                     continue;
@@ -60,6 +61,7 @@ void MessageHandler::handleTimer(message_data incomingData) {
             gotTimerMessage.payload.gotTimer.batteryPercentage = getBatteryPercentage();
             memcpy(gotTimerMessage.address, hostAddress, 6);
             ESP_LOGI("MSG", "Delay average: %d", delayAverage);
+            ESP_LOGI("MSG", "Battery percentage: %f", gotTimerMessage.payload.gotTimer.batteryPercentage);
             setTimeOffset(timerMessage.sendTime, timerMessage.receiveTime, delayAverage);
             xQueueSend(sendQueue, &gotTimerMessage, portMAX_DELAY);
             setTimerSet(true);

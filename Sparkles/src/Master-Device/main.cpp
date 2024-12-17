@@ -4,9 +4,9 @@
 #include "esp_now.h"
 #include <LittleFS.h>
 #include "WiFi.h"
-#include <ledHandler.h>
-#include <messageHandler.h>
-#include <webServer.h>
+#include <LedHandler.h>
+#include <MessageHandler.h>
+#include <WebServer.h>
 
 // put function declarations here:
 

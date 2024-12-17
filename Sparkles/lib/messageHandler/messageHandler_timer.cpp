@@ -1,5 +1,5 @@
 #if DEVICE_MODE == MASTER
-#include "messageHandler.h"
+#include "MessageHandler.h"
 #include "Arduino.h"
 #include "esp_now.h"
 #include "WiFi.h"
@@ -60,9 +60,12 @@ void MessageHandler::runTimerSync() {
         else if (timerIndex > -1) {
             esp_now_send(addressList[timerIndex].address, (uint8_t *) &messageData, sizeof(messageData));
         }
-        if (getLastTimerCounter() < getTimerCounter()+5 && timerIndex > -1) {
+        if (getLastTimerCounter() < getTimerCounter()-5 && timerIndex > -1) {
             setUnavailable(getCurrentTimerIndex()); 
-            break;
+            ESP_LOGI("TIMER", "Setting unavailable. Last counter: %d, current counter: %d, index: %d", getLastTimerCounter(), getTimerCounter(), timerIndex);
+            esp_now_del_peer(addressList[timerIndex].address);
+            vTaskDelete(timerSyncHandle);
+
         }
         vTaskDelay(TIMER_FREQUENCY/portTICK_PERIOD_MS);
     }

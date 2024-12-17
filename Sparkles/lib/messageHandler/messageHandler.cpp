@@ -1,4 +1,4 @@
-#include "messageHandler.h"
+#include "MessageHandler.h"
 MessageHandler* MessageHandler::instance = nullptr;
 
 MessageHandler::MessageHandler() {
